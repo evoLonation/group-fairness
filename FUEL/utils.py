@@ -72,22 +72,23 @@ def read_data(train_data_dir, test_data_dir):
     groups = []
     train_data = {}
     test_data = {}
-
+        
     if "eicu" in train_data_dir:    
         train_files = os.listdir(train_data_dir)
-        train_files = [f for f in train_files if f.endswith('.npy')]
+        train_files = [f for f in train_files if f.endswith('.json')]
         for f in train_files:
             file_path = os.path.join(train_data_dir,f)
-            cdata = np.load(file_path, allow_pickle=True).tolist()
+            with open(file_path, 'r') as inf:
+                cdata = json.load(inf)
             train_data.update(cdata['user_data'])
 
         test_files = os.listdir(test_data_dir)
-        test_files = [f for f in test_files if f.endswith('.npy')]
+        test_files = [f for f in test_files if f.endswith('.json')]
         for f in test_files:
             file_path = os.path.join(test_data_dir,f)
-            cdata = np.load(file_path, allow_pickle=True).tolist()
-            test_data.update(cdata['user_data'])        
-
+            with open(file_path, 'r') as inf:
+                cdata = json.load(inf)
+            test_data.update(cdata['user_data'])    
 
     elif "adult" in train_data_dir:
         train_files = os.listdir(train_data_dir)
@@ -121,6 +122,22 @@ def read_data(train_data_dir, test_data_dir):
         for f in test_files:
             file_path = os.path.join(test_data_dir, f)
             cdata = np.load(file_path, allow_pickle=True).tolist()
+            test_data.update(cdata['user_data'])
+    elif "bank" in train_data_dir or "compas" in train_data_dir:
+        train_files = os.listdir(train_data_dir)
+        train_files = [f for f in train_files if f.endswith('.json')]
+        for f in train_files:
+            file_path = os.path.join(train_data_dir,f)
+            with open(file_path, 'r') as inf:
+                cdata = json.load(inf)
+            train_data.update(cdata['user_data'])
+
+        test_files = os.listdir(test_data_dir)
+        test_files = [f for f in test_files if f.endswith('.json')]
+        for f in test_files:
+            file_path = os.path.join(test_data_dir,f)
+            with open(file_path, 'r') as inf:
+                cdata = json.load(inf)
             test_data.update(cdata['user_data'])
 
     clients = list(train_data.keys())

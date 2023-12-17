@@ -2,11 +2,12 @@ import numpy as np
 import argparse
 import os
 import matplotlib.pyplot as plt
-from latex_utils import latexify
+# from latex_utils import latexify
 from utils import setup_seed, construct_log, get_random_dir_name
 from hco_model import MODEL
 import time
 from tensorboardX import SummaryWriter
+import pandas as pd
 
 parser = argparse.ArgumentParser()
 # parser.add_argument('--other_comment', type = str, default="the_non_phd", help="the dim of the solution")
@@ -41,7 +42,7 @@ parser.add_argument('--batch_size', type = list, default=[100, 100], help="itera
 parser.add_argument('--shuffle', type = bool, default=True, help="iteras for printing the loss info")
 parser.add_argument('--drop_last', type = bool, default=False, help="iteras for printing the loss info")
 parser.add_argument('--data_dir', type = str, default="data", help="iteras for printing the loss info")
-parser.add_argument('--dataset', type = str, default="adult", help="[adult, eicu_d, eicu_los]")
+parser.add_argument('--dataset', type = str, default="adult", help="[adult, eicu_d, eicu_los, bank]")
 parser.add_argument('--load_epoch', type = str, default=0, help="iteras for printing the loss info")
 parser.add_argument('--global_epoch', type = int, default=0, help="iteras for printing the loss info")
 parser.add_argument('--num_workers', type = int, default=0, help="iteras for printing the loss info")
@@ -54,10 +55,14 @@ parser.add_argument('--uniform', action="store_true",  help="uniform mode, witho
 parser.add_argument('--disparity_type', type= str, default= "DP",  help="uniform mode, without any fairness contraints")
 parser.add_argument('--baseline_type', type= str, default= "none",  help="fedave_fair, individual_fair")
 parser.add_argument('--weight_fair', type= float, default= 1.0,  help="weight for disparity")
+parser.add_argument('--mix_dataset', type=bool, default=False, help="")
+parser.add_argument('--bootstrap', type=int, default=0, help="")
+parser.add_argument('--new_trial', type=int, default=0, help="")
 args = parser.parse_args()
 
 
 args.eps = [args.eps_g, args.eps_delta_l, args.eps_delta_g]
+args.target_dir_name = os.path.join('out', args.target_dir_name)
 args.train_dir = os.path.join(args.data_dir, args.dataset, "train")
 args.test_dir = os.path.join(args.data_dir, args.dataset, "test")
 args.ckpt_dir = os.path.join(args.target_dir_name, args.ckpt_dir)
@@ -66,8 +71,15 @@ args.board_dir = os.path.join(args.target_dir_name, args.board_dir)
 args.done_dir = os.path.join(args.target_dir_name, "done")
 args.commandline_file = os.path.join(args.target_dir_name, args.commandline_file)
 
-
-
+# args.step_size = 0.03 
+# args.eps_g = 0.05 
+# args.dataset = 'adult'
+# args.max_epoch_stage1 = 800 
+# args.max_epoch_stage2 = 1500 
+# args.seed = 1 
+# args.target_dir_name = 'test_DP_0-05' 
+# args.uniform_eps = True 
+# args.bootstrap = 100
 
 
 if __name__ == '__main__':
@@ -79,13 +91,87 @@ if __name__ == '__main__':
     else:
         pass
     os.makedirs(args.log_dir, exist_ok = True)
-    os.system("cp *.py " + args.target_dir_name)
+    # linux
+    # os.system("cp *.py " + args.target_dir_name)
+    # windows
+    # os.system("copy *.py " + args.target_dir_name)
     logger = construct_log(args)
     setup_seed(seed = args.seed)
-    model = MODEL(args, logger, writer)
-    if args.valid:
-        losses, accs, diss, pred_diss = model.valid_stage1(False, args.max_epoch_stage1)
+    if args.new_trial != 0:
+        if args.bootstrap == 0 or args.load_epoch == 0:
+            raise "need argument load_epoch and bootstrap"
+        dir = os.path.join(args.log_dir, 'new_trial')
+        os.mkdir(dir)
+        logger.info('==> start new trial')
+        for i in range(args.new_trial):
+            logger.info('new trial: round {}'.format(i))            
+            logger.info('new trial ({}): start train'.format(i))
+            while True:
+                try:
+                    model = MODEL(args, logger, writer)
+                    model.train()
+                    break
+                except AttributeError as e:
+                    print(e)
+                    logger.info('new trial ({}): error occured, restart this round'.format(i))
+            logger.info('new trial ({}): finish train'.format(i))
+            excel_writer = pd.ExcelWriter(os.path.join(dir, '{}.xlsx'.format(i)), engine='openpyxl', mode='w')
+            _, _, diss, _, _ = model.valid_stage1(False, args.load_epoch)
+            table_data = {}
+            for i, dis in enumerate(diss):
+                table_data["client_{}_disparity".format(i)] = [dis]
+            data_frame = pd.DataFrame(table_data)
+            data_frame.to_excel(excel_writer = excel_writer, index = False, sheet_name='origin')
+            _, _, diss_another, _, _ = model.valid_stage1(False, args.load_epoch, another=True)
+            table_data = {}
+            for i, dis in enumerate(diss_another):
+                table_data["client_{}_disparity".format(i)] = [dis]
+            data_frame = pd.DataFrame(table_data)
+            data_frame.to_excel(excel_writer = excel_writer, index = False, sheet_name='another')
+            table_data = {}
+            for i in range(len(diss_another)):
+                table_data["client_{}_disparity".format(i)] = []
+            for _ in range(args.bootstrap):
+                _, _, diss_bootstrap, _, _ = model.valid_stage1(False, args.load_epoch, bootstrap=True)
+                for i, dis in enumerate(diss_bootstrap):
+                    table_data["client_{}_disparity".format(i)].append(dis)
+            data_frame = pd.DataFrame(table_data)
+            data_frame.to_excel(excel_writer = excel_writer, index = False, sheet_name='origin_bootstrap')
+            table_data = {}
+            for i in range(len(diss_another)):
+                table_data["client_{}_disparity".format(i)] = []
+            for _ in range(args.bootstrap):
+                _, _, diss_bootstrap_another, _, _ = model.valid_stage1(False, args.load_epoch, bootstrap=True, another=True)
+                for i, dis in enumerate(diss_bootstrap_another):
+                    table_data["client_{}_disparity".format(i)].append(dis)
+            data_frame = pd.DataFrame(table_data)
+            data_frame.to_excel(excel_writer = excel_writer, index = False, sheet_name='another_bootstrap')
+            excel_writer.close()
     else:
-        model.train()
+        model = MODEL(args, logger, writer)
+        if args.valid:
+            if args.load_epoch == 0:
+                raise "need argument load_epoch"
+            if args.bootstrap != 0:
+                if args.dataset == "eicu":
+                    table_data = {}
+                    for i in range(11):
+                        table_data["client_{}_disparity".format(i)] = []
+                else:
+                    table_data = {"client_0_disparity":[], "client_1_disparity":[]}
+                
+                excel_writer = pd.ExcelWriter(os.path.join(args.log_dir, 'bootstrap.xlsx'), engine='openpyxl', mode='w')
+                for _ in range(args.bootstrap):
+                    losses, accs, diss, pred_diss, aucs = model.valid_stage1(False, args.load_epoch, bootstrap=True)
+                    for i, (dis, pred_dis) in enumerate(zip(diss, pred_diss)):
+                        table_data["client_{}_disparity".format(i)].append(dis)
+                        # table_data["client_{}_pred_disparity".format(i)].append(pred_dis)
+                data_frame = pd.DataFrame(table_data)
+                data_frame.to_excel(excel_writer = excel_writer, index = False)
+                excel_writer.close()
+            else:
+                losses, accs, diss, pred_diss, aucs = model.valid_stage1(False, args.load_epoch)
+        else:
+            model.train()
     model.save_log()
 

@@ -13,6 +13,7 @@ import pdb
 from po_lp import PO_LP
 import pickle
 from sklearn.metrics import roc_auc_score, classification_report
+from torch.utils.data import DataLoader, Subset
 
 
 class RegressionTrain(torch.nn.Module):
@@ -153,6 +154,29 @@ class MODEL(object):
         if int(args.load_epoch) != 0:
             self.model_load(str(args.load_epoch))
 
+        def bootstrap(dataloader):
+            print("bootstrap")
+            len_data = len(dataloader.dataset)
+            while True:
+                indices = np.random.choice(range(len_data), len_data, replace = True)
+                dataset = Subset(dataloader.dataset, indices)
+                a_con = sum(1 for _, _, a in dataset if a == 1.0)
+                na_con = sum(1 for _, _, a in dataset if a == 0.0)
+                if a_con + na_con != len(dataset):
+                    raise "a_con + na_con != len(dataset)"
+                if a_con != 0 and na_con != 0:
+                    break
+                print("dataset only containes one sensitive feature, retry bootstrap sampling")
+            dataloader = DataLoader(dataset,
+                                    batch_size=len(dataset), 
+                                    shuffle = args.shuffle,
+                                    num_workers = args.num_workers,
+                                    pin_memory = True,
+                                    drop_last = args.drop_last)
+            return dataloader
+        self.bootstrap = bootstrap
+        self.new_trial = args.new_trial
+
         self.commandline_save(args)
 
     def commandline_save(self, args):
@@ -208,12 +232,14 @@ class MODEL(object):
 
     def data_load(self, args):
         self.client_train_loaders, self.client_test_loaders = LoadDataset(args)
+        if args.new_trial:
+            _, self.client_test_loaders_another = LoadDataset(args, True)
         self.n_clients = len(self.client_train_loaders)
         self.iter_train_clients = [enumerate(i) for i in self.client_train_loaders]
         self.iter_test_clients = [enumerate(i) for i in self.client_test_loaders]
 
 
-    def valid_stage1(self,  if_train = False, epoch = -1):
+    def valid_stage1(self,  if_train = False, epoch = -1, bootstrap = False, another = False):
         with torch.no_grad():
             losses = []
             accs = []
@@ -224,7 +250,12 @@ class MODEL(object):
                 loader = self.client_train_loaders
             else:
                 loader = self.client_test_loaders
+            if self.new_trial and another:
+                loader = self.client_test_loaders_another
+                print(len(loader))
             for client_idx, client_test_loader in enumerate(loader):
+                if bootstrap:
+                    client_test_loader = self.bootstrap(client_test_loader)
                 valid_loss = []
                 valid_accs = []
                 valid_diss = []
@@ -276,7 +307,6 @@ class MODEL(object):
 
         losses_list = torch.stack(losses)
         loss = torch.max(losses_list)
-
         alphas = F.softmax((losses_list - loss)/delta)
         alpha_without_grad = (Variable(alphas.data.clone(), requires_grad=False)) 
         return alpha_without_grad, loss
@@ -493,13 +523,21 @@ class MODEL(object):
                     specific_eps = self.weight_eps * \
                         np.array([0.00064349,  0.11690249])
                 
-                elif "eicu_los" in self.dataset and self.disparity_type == "DP" and self.sensitive_attr == "race":
-                    specific_eps = self.weight_eps * np.array([0.052, 0.22, 0.035, 0.070, 0.094, 0.008, 0.047, 0.089, 0.078, 0.008, 0.108])
-
+                elif "eicu" in self.dataset and self.disparity_type == "DP" and self.sensitive_attr == "race":
+                    specific_eps = self.weight_eps * np.array([0.04954128339886665, 0.21119311451911926, 
+                                                                0.017849735915660858, 0.0892992913722992, 
+                                                                0.021153846755623817, 0.12375123798847198, 
+                                                                0.07057633996009827, 0.08872509747743607, 
+                                                                0.12286808341741562, 0.02529182843863964, 
+                                                                0.014039037749171257])
                 elif "eicu_los" in self.dataset and self.disparity_type == "Eoppo" and self.sensitive_attr == "race":
                     specific_eps = self.weight_eps * np.array([0.187, 0.297, 0.021, 0.020, 0.103, 0.170, 0.138, 0.029, 0.065, 0.027, 0.087])
-
-
+                elif self.dataset == "bank" and self.disparity_type == "DP" and self.sensitive_attr == "noloan":
+                    specific_eps = self.weight_eps * \
+                        np.array([0.021952737122774124, 0.03466089442372322])
+                elif self.dataset == "compas" and self.disparity_type == "DP" and self.sensitive_attr == "race":
+                    specific_eps = self.weight_eps * \
+                        np.array([0.17829757928848267, 0.060115620493888855])
                 client_disparities.append(torch.abs(pred_dis) - specific_eps[client_idx])
 
 
@@ -664,12 +702,19 @@ class MODEL(object):
 ##########################################GPU()
         grad_performance = grad_performance.t()
         ###
-
-        alpha, gamma = self.po_lp.get_alpha(grads, grad_performance, grads.t())
-        if torch.cuda.is_available():
-            alpha = torch.from_numpy(alpha.reshape(-1)).cuda()
-        else:
-            alpha = torch.from_numpy(alpha.reshape(-1))
+        try:
+            alpha, gamma = self.po_lp.get_alpha(grads, grad_performance, grads.t())
+            if torch.cuda.is_available():
+                alpha = torch.from_numpy(alpha.reshape(-1)).cuda()
+            else:
+                alpha = torch.from_numpy(alpha.reshape(-1))
+        except AttributeError as e:
+            print(grads)
+            print(grad_performance)
+            print(grads.t())
+            print(alpha)
+            print(gamma)
+            raise e
 ##########################################GPU()
 
         client_losses.append(client_pred_disparity)
