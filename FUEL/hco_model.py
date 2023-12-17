@@ -231,9 +231,22 @@ class MODEL(object):
 
 
     def data_load(self, args):
-        self.client_train_loaders, self.client_test_loaders = LoadDataset(args)
         if args.new_trial:
-            _, self.client_test_loaders_another = LoadDataset(args, True)
+            if args.new_trial_whole_rate != -1.0:
+                if args.new_trial_whole_rate < 0 or args.new_trial_whole_rate > 1:
+                    raise("args.new_trial_whole_rate value error")
+                self.client_train_loaders, self.client_test_loaders = LoadDataset(args, train_rate=args.new_trial_whole_rate, test_rate=args.new_trial_whole_rate)
+                _, self.client_test_loaders_another = LoadDataset(args, another_half=True, test_rate=args.new_trial_whole_rate)
+            elif args.new_trial_train_rate != -1.0:
+                if args.new_trial_train_rate < 0 or args.new_trial_train_rate > 1:
+                    raise("args.new_trial_train_rate value error")
+                self.client_train_loaders, self.client_test_loaders = LoadDataset(args, train_rate=args.new_trial_train_rate)
+                _, self.client_test_loaders_another = LoadDataset(args, another_half=True)
+            else:
+                self.client_train_loaders, self.client_test_loaders = LoadDataset(args)
+                _, self.client_test_loaders_another = LoadDataset(args, another_half=True)
+        else:
+            self.client_train_loaders, self.client_test_loaders = LoadDataset(args)
         self.n_clients = len(self.client_train_loaders)
         self.iter_train_clients = [enumerate(i) for i in self.client_train_loaders]
         self.iter_test_clients = [enumerate(i) for i in self.client_test_loaders]

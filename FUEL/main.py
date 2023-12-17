@@ -58,6 +58,8 @@ parser.add_argument('--weight_fair', type= float, default= 1.0,  help="weight fo
 parser.add_argument('--mix_dataset', type=bool, default=False, help="")
 parser.add_argument('--bootstrap', type=int, default=0, help="")
 parser.add_argument('--new_trial', type=int, default=0, help="")
+parser.add_argument('--new_trial_whole_rate', type=float, default=-1.0, help="")
+parser.add_argument('--new_trial_train_rate', type=float, default=-1.0, help="")
 args = parser.parse_args()
 
 
