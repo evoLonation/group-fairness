@@ -107,7 +107,7 @@ if __name__ == '__main__':
                 excel_writer = pd.ExcelWriter(os.path.join(
                         args.target_dir_name, 
                         'results',
-                        f'{round(args.new_trial_train_rate, 3)}_{round(args.new_trial_test_rate, 3)}_{round(args.new_trial_whole_rate, 3)}.xlsx'
+                        f'{args.new_trial_train_rate:.3f}_{args.new_trial_test_rate:.3f}_{args.new_trial_whole_rate:.3f}.xlsx'
                     ),
                     engine='openpyxl', mode='w')
                 def valid_to_excel(another=False, bootstrap=False):
