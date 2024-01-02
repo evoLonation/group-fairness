@@ -63,4 +63,10 @@ python main.py --step_size 0.05 --max_epoch_stage1 800 --max_epoch_stage2 1500 -
 
 python main.py --step_size 0.50 --max_epoch_stage1 800 --max_epoch_stage2 1500 --dataset eicu --sensitive_attr race --seed 1 --target_dir_name new_trial/eicu_DP_0-01_0-50_multi --eps_g 0.01 --uniform_eps --bootstrap 100 --load_epoch 2299 --new_trial 50
 
-python main.py --step_size 0.50 --max_epoch_stage1 800 --max_epoch_stage2 1500 --dataset eicu --sensitive_attr race --seed 1 --target_dir_name new_trial/eicu_DP_0-01_0-50_multi_another_seed_5 --eps_g 0.01 --uniform_eps --bootstrap 100 --load_epoch 2299 --new_trial 50 --seed 5
+python main.py --step_size 0.50 --max_epoch_stage1 800 --max_epoch_stage2 1500 --dataset eicu --sensitive_attr race --target_dir_name new_trial/eicu_DP_0-01_0-50_multi_another_seed_5 --eps_g 0.01 --uniform_eps --bootstrap 100 --load_epoch 2299 --new_trial 50 --seed 5
+
+<!-- 2024.1.2 -->
+python main.py --step_size 0.50 --max_epoch_stage1 100 --max_epoch_stage2 100 --dataset eicu --sensitive_attr race --target_dir_name new_trial/eicu_DP_0-01_0-50_seed_1 --eps_g 0.01 --uniform_eps --new_trial 10 --bootstrap 100 --seed 1
+python main.py --step_size 0.50 --max_epoch_stage1 100 --max_epoch_stage2 100 --dataset eicu --sensitive_attr race --target_dir_name new_trial/eicu_DP_0-01_0-50_seed_1 --eps_g 0.01 --uniform_eps --new_trial 10 --new_trial_test_rate 0.135 --valid --seed 1
+...
+python main.py --step_size 0.50 --max_epoch_stage1 100 --max_epoch_stage2 100 --dataset eicu --sensitive_attr race --target_dir_name new_trial/eicu_DP_0-01_0-50_seed_1 --eps_g 0.01 --uniform_eps --new_trial 10 --new_trial_test_rate 0.015 --valid --seed 1

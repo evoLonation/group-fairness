@@ -232,19 +232,7 @@ class MODEL(object):
 
     def data_load(self, args):
         if args.new_trial:
-            if args.new_trial_whole_rate != -1.0:
-                if args.new_trial_whole_rate < 0 or args.new_trial_whole_rate > 1:
-                    raise("args.new_trial_whole_rate value error")
-                self.client_train_loaders, self.client_test_loaders = LoadDataset(args, train_rate=args.new_trial_whole_rate, test_rate=args.new_trial_whole_rate)
-                _, self.client_test_loaders_another = LoadDataset(args, another_half=True, test_rate=args.new_trial_whole_rate)
-            elif args.new_trial_train_rate != -1.0:
-                if args.new_trial_train_rate < 0 or args.new_trial_train_rate > 1:
-                    raise("args.new_trial_train_rate value error")
-                self.client_train_loaders, self.client_test_loaders = LoadDataset(args, train_rate=args.new_trial_train_rate)
-                _, self.client_test_loaders_another = LoadDataset(args, another_half=True)
-            else:
-                self.client_train_loaders, self.client_test_loaders = LoadDataset(args)
-                _, self.client_test_loaders_another = LoadDataset(args, another_half=True)
+            self.client_train_loaders, self.client_test_loaders, self.client_test_loaders_another = LoadDataset(args)
         else:
             self.client_train_loaders, self.client_test_loaders = LoadDataset(args)
         self.n_clients = len(self.client_train_loaders)
@@ -265,7 +253,6 @@ class MODEL(object):
                 loader = self.client_test_loaders
             if self.new_trial and another:
                 loader = self.client_test_loaders_another
-                print(len(loader))
             for client_idx, client_test_loader in enumerate(loader):
                 if bootstrap:
                     client_test_loader = self.bootstrap(client_test_loader)
