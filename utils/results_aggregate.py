@@ -35,13 +35,13 @@ for unit_dir in os.listdir(origin_result_dir):
                 data.setdefault(f'client_{j}', []).append(dp)
             if rate == 10:
                 excel_writer = pd.ExcelWriter(os.path.join(bootstrap_dir, f'{bootstrap_i}.xlsx'), engine='openpyxl', mode='w')
-                df = pd.read_excel(file_path, header=None, sheet_name='origin_bootstrap', engine='openpyxl')
+                df = pd.read_excel(file_path, header=0, sheet_name='origin_bootstrap', engine='openpyxl')
                 df.to_excel(excel_writer, index=False, sheet_name='origin_bootstrap')
-                df = pd.read_excel(file_path, header=None, sheet_name='another_bootstrap', engine='openpyxl')
+                df = pd.read_excel(file_path, header=0, sheet_name='another_bootstrap', engine='openpyxl')
                 df.to_excel(excel_writer, index=False, sheet_name='another_bootstrap')
                 excel_writer.close()
                 bootstrap_i += 1
-for i in range():
+for i in range(10):
     rate = i + 1
     excel_writer = pd.ExcelWriter(os.path.join(tradition_dir, f'{int(int(rate)/10)}-{int(rate)%10}.xlsx'), engine='openpyxl', mode='w')
     pd.DataFrame(tradition_data_origins[i]).to_excel(excel_writer, index=False, sheet_name='origin')
