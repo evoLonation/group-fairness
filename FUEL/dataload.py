@@ -252,11 +252,15 @@ def LoadDataset(args):
                 def sample_in_remain(indices_remain, rate, record_client=None):
                     if record_client != None and args.valid:
                         indices = client_train_indices[record_client]
+                        with open(os.path.join(args.target_dir_name, 'results', 'indices.txt'), 'a') as f:
+                            f.write(' '.join(map(lambda x: str(x), indices[:5])) + ' ' + str(len(indices)) + '\n')
                         # print(f'{indices[0]} {indices[1]} {indices[2]}')
                     else: 
                         indices = np.random.choice(indices_remain, int(len(dataset) * rate), replace = False)
                     if record_client != None and not args.valid:
                         client_train_indices[record_client] = indices.tolist()
+                        with open(os.path.join(args.target_dir_name, 'results', 'indices.txt'), 'a') as f:
+                            f.write(' '.join(map(lambda x: str(x), indices.tolist()[:5])) + ' ' + str(indices.size) + '\n')
                         # print(f'{indices[0]} {indices[1]} {indices[2]}')
                     sub_dataset = Subset(dataset, indices)
                     if not judge_contain_all_sensitive(sub_dataset):
