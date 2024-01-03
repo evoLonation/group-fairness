@@ -232,7 +232,8 @@ class MODEL(object):
 
     def data_load(self, args):
         if args.new_trial:
-            self.client_train_loaders, self.client_test_loaders, self.client_test_loaders_another = LoadDataset(args)
+            self.client_train_loaders, self.client_test_loaders = LoadDataset(args)
+            _, self.client_test_loaders_another = LoadDataset(args, another_half=True)
         else:
             self.client_train_loaders, self.client_test_loaders = LoadDataset(args)
         self.n_clients = len(self.client_train_loaders)

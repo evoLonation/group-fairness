@@ -5,7 +5,6 @@ from utils import read_data
 import torch
 from torch.utils.data import Dataset, DataLoader, ConcatDataset, Subset
 import pdb
-import json
 
 class Federated_Dataset(Dataset):
     def __init__(self, X, Y, A):
@@ -24,7 +23,7 @@ class Federated_Dataset(Dataset):
 
 
 #### adult dataset x("51 White", "52 Asian-Pac-Islander", "53 Amer-Indian-Eskimo", "54 Other", "55 Black", "56 Female", "57 Male")
-def LoadDataset(args):
+def LoadDataset(args, another_half = False, train_rate = 1.0, test_rate = 1.0):
     clients_name, groups, train_data, test_data = read_data(args.train_dir, args.test_dir)
 
     # client_name [phd, non-phd]
@@ -227,20 +226,10 @@ def LoadDataset(args):
                                          drop_last = args.drop_last)
             combined_loaders.append(combined_loader)
         return client_train_loads, combined_loaders
-    # 返回三个互不相交的数据集，用于作为训练集、测试集、模拟整体的数据集
     if args.new_trial:
-        client_train_indices = {}
-        if args.valid:
-            with open(os.path.join(args.target_dir_name, 'results', 'client_indices.json'), 'r') as f:
-                client_train_indices = json.load(f)
-        def cut_dataset(dataset, client_name):
-            if args.new_trial_train_rate <= 0 or args.new_trial_test_rate <= 0 or args.new_trial_whole_rate <= 0 \
-                or args.new_trial_train_rate + args.new_trial_test_rate + args.new_trial_whole_rate > 1.0:
-                raise RuntimeError("new trial rate illegal")
+        def cut_loader(dataloader, rate = 0.5):
+            dataset = dataloader.dataset
             while True:
-                class SampleError(Exception):
-                    def __init__(self):
-                        super().__init__()
                 def judge_contain_all_sensitive(sub_dataset):
                     a_con = sum(1 for _, _, a in sub_dataset if a == 1.0)
                     na_con = sum(1 for _, _, a in sub_dataset if a == 0.0)
@@ -249,58 +238,53 @@ def LoadDataset(args):
                     if a_con != 0 and na_con != 0:
                         return True
                     return False
-                def sample_in_remain(indices_remain, rate, record_client=None):
-                    if record_client != None and args.valid:
-                        indices = client_train_indices[record_client]
-                        with open(os.path.join(args.target_dir_name, 'results', 'indices.txt'), 'a') as f:
-                            f.write(' '.join(map(lambda x: str(x), indices[:5])) + ' ' + str(len(indices)) + '\n')
-                        # print(f'{indices[0]} {indices[1]} {indices[2]}')
-                    else: 
-                        indices = np.random.choice(indices_remain, int(len(dataset) * rate), replace = False)
-                    if record_client != None and not args.valid:
-                        client_train_indices[record_client] = indices.tolist()
-                        with open(os.path.join(args.target_dir_name, 'results', 'indices.txt'), 'a') as f:
-                            f.write(' '.join(map(lambda x: str(x), indices.tolist()[:5])) + ' ' + str(indices.size) + '\n')
-                        # print(f'{indices[0]} {indices[1]} {indices[2]}')
-                    sub_dataset = Subset(dataset, indices)
-                    if not judge_contain_all_sensitive(sub_dataset):
-                        raise SampleError()
-                    sub_dataloader = DataLoader(sub_dataset,
-                                    batch_size=len(sub_dataset), 
+                indices_1 = np.random.choice(range(len(dataset)), int(len(dataset) * rate), replace = False)
+                sub_dataset_1 = Subset(dataset, indices_1)
+                if not judge_contain_all_sensitive(sub_dataset_1):
+                    print("dataset only containes one sensitive feature, retry sampling")
+                    continue
+                indices_2 = list(set(range(len(dataset))) - set(indices_1))
+                sub_dataset_2 = Subset(dataset, indices_2)
+                if not judge_contain_all_sensitive(sub_dataset_2):
+                    print("dataset only containes one sensitive feature, retry sampling")
+                    continue
+                break
+            sub_dataloader_1 = DataLoader(sub_dataset_1,
+                                    batch_size=len(sub_dataset_1), 
                                     shuffle = args.shuffle,
                                     num_workers = args.num_workers,
                                     pin_memory = True,
                                     drop_last = args.drop_last)
-                    indices_remain = list(set(indices_remain) - set(indices))
-                    return indices, indices_remain, sub_dataloader
-                indices_remain = range(len(dataset))
-                try:
-                    indices_train, indices_remain, sub_dataloader_train = sample_in_remain(indices_remain, args.new_trial_train_rate, client_name)
-                    indices_test, indices_remain, sub_dataloader_test = sample_in_remain(indices_remain, args.new_trial_test_rate)
-                    indices_whole, _, sub_dataloader_whole = sample_in_remain(indices_remain, args.new_trial_whole_rate)
-                    if set(indices_train) & set(indices_test) or set(indices_test) & set(indices_whole) or set(indices_train) & set(indices_whole):
-                        raise RuntimeError('3 dataset is intersect')
-                    break
-                except SampleError as e:
-                    print("dataset only containes one sensitive feature, retry sampling")
-                    continue
-            return sub_dataloader_train, sub_dataloader_test, sub_dataloader_whole
-        new_client_train_loads = []
-        new_client_test_loads = []
-        new_client_whole_loads = []
-        for client_i, (client_train_load, client_test_load) in enumerate(zip(client_train_loads, client_test_loads)):
-            combined_dataset = ConcatDataset([client_train_load.dataset, client_test_load.dataset])
-            new_client_train_load, new_client_test_load, new_client_whole_load = cut_dataset(combined_dataset, str(client_i))
-            # print(f'new_client_train_load rate: {len(new_client_train_load.dataset) * 1.0 / len(combined_dataset)}')
-            # print(f'new_client_test_load rate: {len(new_client_test_load.dataset) * 1.0 / len(combined_dataset)}')
-            # print(f'new_client_whole_load rate: {len(new_client_whole_load.dataset) * 1.0 / len(combined_dataset)}')
-            new_client_train_loads.append(new_client_train_load)
-            new_client_test_loads.append(new_client_test_load)
-            new_client_whole_loads.append(new_client_whole_load)
-        if not args.valid:
-            with open(os.path.join(args.target_dir_name, 'results', 'client_indices.json'), 'w') as f:
-                json.dump(client_train_indices, f)
-        return new_client_train_loads, new_client_test_loads, new_client_whole_loads
+            sub_dataloader_2 = DataLoader(sub_dataset_2,
+                                    batch_size=len(sub_dataset_2), 
+                                    shuffle = args.shuffle,
+                                    num_workers = args.num_workers,
+                                    pin_memory = True,
+                                    drop_last = args.drop_last)
+            return sub_dataloader_1, sub_dataloader_2
+        if train_rate != 1.0:
+            client_train_loads = [cut_loader(client_train_load, train_rate)[0] for client_train_load in client_train_loads]
+        if test_rate != 1.0:
+            client_test_loads = [cut_loader(client_test_load, test_rate)[0] for client_test_load in client_test_loads]
+        if not another_half:
+            for i in range(len(client_train_loads)):
+                client_train_loads[i], _ = cut_loader(client_train_loads[i])
+            for i in range(len(client_test_loads)):
+                client_test_loads[i], _ = cut_loader(client_test_loads[i])
+        else:
+            another_loads = []
+            for i in range(len(client_train_loads)):
+                _, another_train = cut_loader(client_train_loads[i])
+                _, another_test = cut_loader(client_test_loads[i])
+                another_dataset = ConcatDataset([another_train.dataset, another_test.dataset])
+                another_loader = DataLoader(another_dataset, 
+                                            batch_size=len(another_dataset),
+                                            shuffle = args.shuffle,
+                                            num_workers = args.num_workers,
+                                            pin_memory = True,
+                                            drop_last = args.drop_last)
+                another_loads.append(another_loader)
+            client_test_loads = another_loads
 
     return client_train_loads, client_test_loads
 
