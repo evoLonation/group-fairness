@@ -231,9 +231,10 @@ class MODEL(object):
 
 
     def data_load(self, args):
-        self.client_train_loaders, self.client_test_loaders = LoadDataset(args)
         if args.new_trial:
-            _, self.client_test_loaders_another = LoadDataset(args, True)
+            self.client_train_loaders, self.client_test_loaders, self.client_test_loaders_another = LoadDataset(args)
+        else:
+            self.client_train_loaders, self.client_test_loaders = LoadDataset(args)
         self.n_clients = len(self.client_train_loaders)
         self.iter_train_clients = [enumerate(i) for i in self.client_train_loaders]
         self.iter_test_clients = [enumerate(i) for i in self.client_test_loaders]

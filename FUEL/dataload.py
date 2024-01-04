@@ -23,7 +23,7 @@ class Federated_Dataset(Dataset):
 
 
 #### adult dataset x("51 White", "52 Asian-Pac-Islander", "53 Amer-Indian-Eskimo", "54 Other", "55 Black", "56 Female", "57 Male")
-def LoadDataset(args, another_half = False):
+def LoadDataset(args):
     clients_name, groups, train_data, test_data = read_data(args.train_dir, args.test_dir)
 
     # client_name [phd, non-phd]
@@ -227,9 +227,13 @@ def LoadDataset(args, another_half = False):
             combined_loaders.append(combined_loader)
         return client_train_loads, combined_loaders
     if args.new_trial:
-        def cut_loader(dataloader):
-            dataset = dataloader.dataset
+        class SampleError: Exception
+        def cut_loader(dataset, rate = 0.5):
+            retry_num = 0
             while True:
+                retry_num += 1
+                if retry_num >= 5:
+                    raise SampleError()
                 def judge_contain_all_sensitive(sub_dataset):
                     a_con = sum(1 for _, _, a in sub_dataset if a == 1.0)
                     na_con = sum(1 for _, _, a in sub_dataset if a == 0.0)
@@ -238,7 +242,7 @@ def LoadDataset(args, another_half = False):
                     if a_con != 0 and na_con != 0:
                         return True
                     return False
-                indices_1 = np.random.choice(range(len(dataset)), int(len(dataset) * 0.5), replace = False)
+                indices_1 = np.random.choice(range(len(dataset)), int(len(dataset) * rate), replace = False)
                 sub_dataset_1 = Subset(dataset, indices_1)
                 if not judge_contain_all_sensitive(sub_dataset_1):
                     print("dataset only containes one sensitive feature, retry sampling")
@@ -262,44 +266,23 @@ def LoadDataset(args, another_half = False):
                                     pin_memory = True,
                                     drop_last = args.drop_last)
             return sub_dataloader_1, sub_dataloader_2
-        if not another_half:
-            # def cut_loader(dataloader):
-            #     dataset = dataloader.dataset
-            #     while True:
-            #         indices = np.random.choice(range(len(dataset)), int(len(dataset) * 0.5), replace = False)
-            #         sub_dataset = Subset(dataset, indices)
-            #         a_con = sum(1 for _, _, a in sub_dataset if a == 1.0)
-            #         na_con = sum(1 for _, _, a in sub_dataset if a == 0.0)
-            #         if a_con + na_con != len(sub_dataset):
-            #             raise "a_con + na_con != len(sub_dataset)"
-            #         if a_con != 0 and na_con != 0:
-            #             break
-            #         print("dataset only containes one sensitive feature, retry sampling")
-            #     sub_dataloader = DataLoader(sub_dataset,
-            #                             batch_size=len(sub_dataset), 
-            #                             shuffle = args.shuffle,
-            #                             num_workers = args.num_workers,
-            #                             pin_memory = True,
-            #                             drop_last = args.drop_last)
-            #     return sub_dataloader
-            for i in range(len(client_train_loads)):
-                client_train_loads[i], _ = cut_loader(client_train_loads[i])
-            for i in range(len(client_test_loads)):
-                client_test_loads[i], _ = cut_loader(client_test_loads[i])
-        else:
-            another_loads = []
-            for i in range(len(client_train_loads)):
-                _, another_train = cut_loader(client_train_loads[i])
-                _, another_test = cut_loader(client_test_loads[i])
-                another_dataset = ConcatDataset([another_train.dataset, another_test.dataset])
-                another_loader = DataLoader(another_dataset, 
-                                            batch_size=len(another_dataset),
-                                            shuffle = args.shuffle,
-                                            num_workers = args.num_workers,
-                                            pin_memory = True,
-                                            drop_last = args.drop_last)
-                another_loads.append(another_loader)
-            client_test_loads = another_loads
+        client_combine_datasets = [ConcatDataset(client_train_loads[i].dataset, client_test_loads[i].dataset) for i in len(client_train_loads)]
+        client_train_loads = []
+        client_test_loads = []
+        client_another_loads = []
+        for dataset in client_combine_datasets:
+            while True:
+                try:
+                    half1, half2 = cut_loader(dataset, 0.5)
+                    train, test = cut_loader(half2.dataset, 0.7)
+                    break
+                except _ as SampleError:
+                    print("dataset only containes one sensitive feature, retry sampling (outside)")
+                    continue
+            client_train_loads.append(train)
+            client_test_loads.append(test)
+            client_another_loads.append(half1)  
+        return client_train_loads, client_test_loads, client_another_loads
 
     return client_train_loads, client_test_loads
 
