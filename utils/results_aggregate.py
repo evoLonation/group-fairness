@@ -1,6 +1,36 @@
 import pandas as pd
 import os 
 
+class ResultAggregator:
+    def __init__(self):
+        self.data_origin = {}
+        self.data_another = {}
+        self.bootstrap_i = 0
+    def handle_file(self, file_path, bootstrap_dir=None):
+        print(file_path)
+        df = pd.read_excel(file_path, header=None, sheet_name='origin', engine='openpyxl')
+        for j, dp in enumerate(df.loc[1]):
+            self.data_origin.setdefault(f'client_{j}', []).append(dp)
+        df = pd.read_excel(file_path, header=None, sheet_name='another', engine='openpyxl')
+        for j, dp in enumerate(df.loc[1]):
+            self.data_another.setdefault(f'client_{j}', []).append(dp)
+        if bootstrap_dir != None:
+            excel_writer = pd.ExcelWriter(os.path.join(bootstrap_dir, f'{self.bootstrap_i}.xlsx'), engine='openpyxl', mode='w')
+            df = pd.read_excel(file_path, header=0, sheet_name='origin_bootstrap', engine='openpyxl')
+            df.to_excel(excel_writer, index=False, sheet_name='origin_bootstrap')
+            df = pd.read_excel(file_path, header=0, sheet_name='another_bootstrap', engine='openpyxl')
+            df.to_excel(excel_writer, index=False, sheet_name='another_bootstrap')
+            excel_writer.close()
+            self.bootstrap_i += 1
+    def save(self, file_path):
+        if self.data_origin == {} and self.data_another == {}:
+            return
+        excel_writer = pd.ExcelWriter(file_path, engine='openpyxl', mode='w')
+        pd.DataFrame(self.data_origin).to_excel(excel_writer, index=False, sheet_name='origin')
+        pd.DataFrame(self.data_another).to_excel(excel_writer, index=False, sheet_name='another')
+        excel_writer.close()
+
+bootstrap = False
 output_dir = 'results'
 origin_result_dir = '../FUEL/out/new_trial'
 os.makedirs(output_dir)
@@ -8,12 +38,9 @@ tradition_dir = os.path.join(output_dir, 'tradition')
 os.makedirs(tradition_dir)
 bootstrap_dir = os.path.join(output_dir, 'bootstrap')
 os.makedirs(bootstrap_dir)
-bootstrap_i = 0
-tradition_data_origins = []
-tradition_data_anothers = []
+aggregators = []
 for i in range(10):
-    tradition_data_origins.append({})
-    tradition_data_anothers.append({})
+    aggregators.append(ResultAggregator())
 for unit_dir in os.listdir(origin_result_dir):
     if not 'eicu_DP_0-01_0-50_seed_' in unit_dir:
         continue
@@ -24,26 +51,10 @@ for unit_dir in os.listdir(origin_result_dir):
             file_path = os.path.join(origin_result_dir, unit_dir, round_dir, 'results', filename)
             if not os.path.exists(file_path):
                 continue
-            print(file_path)
-            df = pd.read_excel(file_path, header=None, sheet_name='origin', engine='openpyxl')
-            for j, dp in enumerate(df.loc[1]):
-                data = tradition_data_origins[rate-1]
-                data.setdefault(f'client_{j}', []).append(dp)
-            df = pd.read_excel(file_path, header=None, sheet_name='another', engine='openpyxl')
-            for j, dp in enumerate(df.loc[1]):
-                data = tradition_data_anothers[rate-1]
-                data.setdefault(f'client_{j}', []).append(dp)
-            if rate == 10:
-                excel_writer = pd.ExcelWriter(os.path.join(bootstrap_dir, f'{bootstrap_i}.xlsx'), engine='openpyxl', mode='w')
-                df = pd.read_excel(file_path, header=0, sheet_name='origin_bootstrap', engine='openpyxl')
-                df.to_excel(excel_writer, index=False, sheet_name='origin_bootstrap')
-                df = pd.read_excel(file_path, header=0, sheet_name='another_bootstrap', engine='openpyxl')
-                df.to_excel(excel_writer, index=False, sheet_name='another_bootstrap')
-                excel_writer.close()
-                bootstrap_i += 1
+            if rate == 10 and bootstrap:
+                aggregators[i].handle_file(file_path, bootstrap_dir)
+            else:
+                aggregators[i].handle_file(file_path)
 for i in range(10):
     rate = i + 1
-    excel_writer = pd.ExcelWriter(os.path.join(tradition_dir, f'{int(int(rate)/10)}-{int(rate)%10}.xlsx'), engine='openpyxl', mode='w')
-    pd.DataFrame(tradition_data_origins[i]).to_excel(excel_writer, index=False, sheet_name='origin')
-    pd.DataFrame(tradition_data_anothers[i]).to_excel(excel_writer, index=False, sheet_name='another')
-    excel_writer.close()
+    aggregators[i].save(os.path.join(tradition_dir, f'{int(int(rate)/10)}-{int(rate)%10}.xlsx'))
