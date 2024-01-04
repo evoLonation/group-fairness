@@ -266,7 +266,7 @@ def LoadDataset(args):
                                     pin_memory = True,
                                     drop_last = args.drop_last)
             return sub_dataloader_1, sub_dataloader_2
-        client_combine_datasets = [ConcatDataset(client_train_loads[i].dataset, client_test_loads[i].dataset) for i in len(client_train_loads)]
+        client_combine_datasets = [ConcatDataset(client_train_loads[i].dataset, client_test_loads[i].dataset) for i in range(len(client_train_loads))]
         client_train_loads = []
         client_test_loads = []
         client_another_loads = []
