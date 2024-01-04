@@ -73,6 +73,7 @@ args.ckpt_dir_ = args.ckpt_dir
 args.log_dir_ = args.log_dir
 args.board_dir_ = args.board_dir
 args.commandline_file_ = args.commandline_file
+args.done_all_dir = os.path.join(args.target_dir_name, 'doneall')
 def update_args_dir():
     args.ckpt_dir = os.path.join(args.target_dir_name, args.ckpt_dir_)
     args.log_dir = os.path.join(args.target_dir_name, args.log_dir_)
@@ -144,6 +145,8 @@ if __name__ == '__main__':
                         logger.info('new trial ({}): error occured, restart this round'.format(new_trial_round))
                 logger.info('new trial ({}): finish train'.format(new_trial_round))
                 new_trial_valid(model, args.max_epoch_stage1 + args.max_epoch_stage2 - 1)
+            model.save_log()
+        os.makedirs(args.done_all_dir, exist_ok = True)
     else:
         writer = SummaryWriter(log_dir = args.board_dir)
         if args.use_saved_args:
