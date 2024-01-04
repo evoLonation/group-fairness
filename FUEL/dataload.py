@@ -228,7 +228,7 @@ def LoadDataset(args, train_rate = 1.0, test_rate = 1.0):
         return client_train_loads, combined_loaders
     if args.new_trial:
         class SampleError: Exception
-        def cut_loader(dataset, rate = 0.5):
+        def cut_dataset(dataset, rate = 0.5):
             retry_num = 0
             while True:
                 retry_num += 1
@@ -253,39 +253,42 @@ def LoadDataset(args, train_rate = 1.0, test_rate = 1.0):
                     print("dataset only containes one sensitive feature, retry sampling")
                     continue
                 break
-            sub_dataloader_1 = DataLoader(sub_dataset_1,
-                                    batch_size=len(sub_dataset_1), 
-                                    shuffle = args.shuffle,
-                                    num_workers = args.num_workers,
-                                    pin_memory = True,
-                                    drop_last = args.drop_last)
-            sub_dataloader_2 = DataLoader(sub_dataset_2,
-                                    batch_size=len(sub_dataset_2), 
-                                    shuffle = args.shuffle,
-                                    num_workers = args.num_workers,
-                                    pin_memory = True,
-                                    drop_last = args.drop_last)
-            return sub_dataloader_1, sub_dataloader_2
-        if train_rate != 1.0:
-            client_train_loads = [cut_loader(client_train_load, train_rate)[0] for client_train_load in client_train_loads]
-        if test_rate != 1.0:
-            client_test_loads = [cut_loader(client_test_load, test_rate)[0] for client_test_load in client_test_loads]
-        client_combine_datasets = [ConcatDataset([client_train_loads[i].dataset, client_test_loads[i].dataset]) for i in range(len(client_train_loads))]
-        client_train_loads = []
-        client_test_loads = []
-        client_another_loads = []
-        for dataset in client_combine_datasets:
-            while True:
-                try:
-                    half1, half2 = cut_loader(dataset, 0.5)
-                    train, test = cut_loader(half2.dataset, 0.7)
-                    break
-                except _ as SampleError:
-                    print("dataset only containes one sensitive feature, retry sampling (outside)")
-                    continue
-            client_train_loads.append(train)
-            client_test_loads.append(test)
-            client_another_loads.append(half1)  
+            return sub_dataset_1, sub_dataset_2
+        def create_dataloader(dataset):
+            return DataLoader(dataset,
+                            batch_size=len(dataset), 
+                            shuffle = args.shuffle,
+                            num_workers = args.num_workers,
+                            pin_memory = True,
+                            drop_last = args.drop_last)
+        if args.new_trial_method == 'old':
+            client_train_loads = [create_dataloader(cut_dataset(loader.dataset)[0]) for loader in client_train_loads]
+            client_test_loads = [create_dataloader(cut_dataset(loader.dataset)[0]) for loader in client_test_loads]
+            client_another_loads = [
+                create_dataloader(ConcatDataset([cut_dataset(train_loader.dataset)[1], cut_dataset(test_loader.dataset)[1]])) 
+                for train_loader, test_loader in zip(client_train_loads, client_test_loads)
+            ]
+        elif args.new_trial_method == 'new':
+            client_combine_datasets = [
+                ConcatDataset([train_loader.dataset, test_loader.dataset]) 
+                for train_loader, test_loader in zip(client_train_loads, client_test_loads)
+            ]
+            def split_dataset(dataset):
+                while True:
+                    try:
+                        half1, half2 = cut_dataset(dataset, 0.5)
+                        train, test = cut_dataset(half2, 0.7)
+                        break
+                    except _ as SampleError:
+                        print("dataset only containes one sensitive feature, retry sampling (outside)")
+                        continue
+                return train, test, half1
+            client_split_datasets = [split_dataset(dataset) for dataset in client_combine_datasets]
+            client_train_loads = [datasets[0] for datasets in client_split_datasets]
+            client_test_loads = [datasets[1] for datasets in client_split_datasets]
+            client_another_loads = [datasets[2] for datasets in client_split_datasets]
+        else:
+            raise RuntimeError('args.new_trial_method invalid')
         return client_train_loads, client_test_loads, client_another_loads
 
     return client_train_loads, client_test_loads
