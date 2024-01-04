@@ -270,7 +270,7 @@ def LoadDataset(args, train_rate = 1.0, test_rate = 1.0):
             client_train_loads = [cut_loader(client_train_load, train_rate)[0] for client_train_load in client_train_loads]
         if test_rate != 1.0:
             client_test_loads = [cut_loader(client_test_load, test_rate)[0] for client_test_load in client_test_loads]
-        client_combine_datasets = [ConcatDataset(client_train_loads[i].dataset, client_test_loads[i].dataset) for i in len(client_train_loads)]
+        client_combine_datasets = [ConcatDataset([client_train_loads[i].dataset, client_test_loads[i].dataset]) for i in range(len(client_train_loads))]
         client_train_loads = []
         client_test_loads = []
         client_another_loads = []
