@@ -263,6 +263,7 @@ def LoadDataset(args, train_rate = 1.0, test_rate = 1.0):
                             pin_memory = True,
                             drop_last = args.drop_last)
         if args.new_trial_method == 'old':
+            # 这里是错误的实现，client_another_loads里面全是client_train_loads和client_test_loads了
             client_train_loads = [create_dataloader(cut_dataset(loader.dataset)[0]) for loader in client_train_loads]
             client_test_loads = [create_dataloader(cut_dataset(loader.dataset)[0]) for loader in client_test_loads]
             client_another_loads = [
@@ -270,6 +271,25 @@ def LoadDataset(args, train_rate = 1.0, test_rate = 1.0):
                 for train_loader, test_loader in zip(client_train_loads, client_test_loads)
             ]
         elif args.new_trial_method == 'old2':
+            # 同上，也是错误的实现
+            client_train_results = [cut_dataset(loader.dataset) for loader in client_train_loads]
+            client_train_loads = [create_dataloader(result[0]) for result in client_train_results]
+            client_train_indices = [result[2] for result in client_train_results]
+            if not args.valid:
+                with open(os.path.join(args.target_dir_name, 'indices.json'), 'w') as f:
+                    json.dump(client_train_indices, f)
+            client_test_loads = [create_dataloader(cut_dataset(loader.dataset)[0]) for loader in client_test_loads]
+            client_another_loads = [
+                create_dataloader(cut_dataset(ConcatDataset([train_loader.dataset, test_loader.dataset]))[1]) 
+                for train_loader, test_loader in zip(client_train_loads, client_test_loads)
+            ]
+        elif args.new_trial_method == 'old3':
+            client_resample_datasets = [
+                cut_dataset(ConcatDataset([train_loader.dataset, test_loader.dataset]), 0.7)[0:2]
+                for train_loader, test_loader in zip(client_train_loads, client_test_loads)
+            ]
+            client_train_loads = [create_dataloader(dataset[0]) for dataset in client_resample_datasets]
+            client_test_loads = [create_dataloader(dataset[1]) for dataset in client_resample_datasets]
             client_train_results = [cut_dataset(loader.dataset) for loader in client_train_loads]
             client_train_loads = [create_dataloader(result[0]) for result in client_train_results]
             client_train_indices = [result[2] for result in client_train_results]
