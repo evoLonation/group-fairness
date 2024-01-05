@@ -268,6 +268,13 @@ def LoadDataset(args, train_rate = 1.0, test_rate = 1.0):
                 create_dataloader(ConcatDataset([cut_dataset(train_loader.dataset)[1], cut_dataset(test_loader.dataset)[1]])) 
                 for train_loader, test_loader in zip(client_train_loads, client_test_loads)
             ]
+        elif args.new_trial_method == 'old2':
+            client_train_loads = [create_dataloader(cut_dataset(loader.dataset)[0]) for loader in client_train_loads]
+            client_test_loads = [create_dataloader(cut_dataset(loader.dataset)[0]) for loader in client_test_loads]
+            client_another_loads = [
+                create_dataloader(cut_dataset(ConcatDataset([train_loader.dataset, test_loader.dataset]))[1]) 
+                for train_loader, test_loader in zip(client_train_loads, client_test_loads)
+            ]
         elif args.new_trial_method == 'new':
             client_combine_datasets = [
                 ConcatDataset([train_loader.dataset, test_loader.dataset]) 
