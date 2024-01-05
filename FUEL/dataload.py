@@ -5,6 +5,7 @@ from utils import read_data
 import torch
 from torch.utils.data import Dataset, DataLoader, ConcatDataset, Subset
 import pdb
+import json
 
 class Federated_Dataset(Dataset):
     def __init__(self, X, Y, A):
@@ -253,7 +254,7 @@ def LoadDataset(args, train_rate = 1.0, test_rate = 1.0):
                     print("dataset only containes one sensitive feature, retry sampling")
                     continue
                 break
-            return sub_dataset_1, sub_dataset_2
+            return sub_dataset_1, sub_dataset_2, indices_1.tolist()
         def create_dataloader(dataset):
             return DataLoader(dataset,
                             batch_size=len(dataset), 
@@ -269,7 +270,12 @@ def LoadDataset(args, train_rate = 1.0, test_rate = 1.0):
                 for train_loader, test_loader in zip(client_train_loads, client_test_loads)
             ]
         elif args.new_trial_method == 'old2':
-            client_train_loads = [create_dataloader(cut_dataset(loader.dataset)[0]) for loader in client_train_loads]
+            client_train_results = [cut_dataset(loader.dataset) for loader in client_train_loads]
+            client_train_loads = [create_dataloader(result[0]) for result in client_train_results]
+            client_train_indices = [result[2] for result in client_train_results]
+            if not args.valid:
+                with open(os.path.join(args.target_dir_name, 'indices.json'), 'w') as f:
+                    json.dump(client_train_indices, f)
             client_test_loads = [create_dataloader(cut_dataset(loader.dataset)[0]) for loader in client_test_loads]
             client_another_loads = [
                 create_dataloader(cut_dataset(ConcatDataset([train_loader.dataset, test_loader.dataset]))[1]) 
