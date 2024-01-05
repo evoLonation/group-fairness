@@ -1,5 +1,6 @@
 import os
 import random
+from typing import Any
 import numpy as np 
 from utils import read_data
 import torch
@@ -301,6 +302,72 @@ def LoadDataset(args, train_rate = 1.0, test_rate = 1.0):
                 create_dataloader(cut_dataset(ConcatDataset([train_loader.dataset, test_loader.dataset]))[1]) 
                 for train_loader, test_loader in zip(client_train_loads, client_test_loads)
             ]
+        elif args.new_trial_method == 'old4':
+            client_whole_datasets = [ConcatDataset([train.dataset, test.dataset]) 
+                                    for train, test in zip(client_train_loads, client_test_loads)]
+            def compute_indice(len_data):
+                indices_train = np.random.choice(range(int(len_data * 0.7)), int(len_data * 0.35), replace = False)
+                indices_test = np.random.choice(range(int(len_data * 0.7), len_data), int(len_data * 0.15), replace = False)
+                indices_another = np.random.choice(range(len_data), int(len_data * 0.50), replace = False)
+                return indices_train, indices_test, indices_another
+            indice_tuples = [compute_indice(len(dataset)) for dataset in client_whole_datasets]
+            # report sample
+            class EqualValue:
+                def __init__(self):
+                    self.cnt = 0
+                def __setattr__(self, __name: str, __value: Any):
+                    if __name == 'value':
+                        if self.cnt == 0:
+                            object.__setattr__(self, __name, __value)
+                        elif self.value < __value and self.value * 1.0 / __value > 0.88 or \
+                            self.value > __value and __value * 1.0 / self.value > 0.88 or \
+                            self.value < 0.001 and abs(self.value - __value) < 0.001 or \
+                            self.value == __value:
+                            object.__setattr__(self, __name, (self.value * self.cnt + __value) * 1.0 / (self.cnt+1))
+                        else:
+                            raise RuntimeError(f'client report value not equal: {self.value} vs {__value}')
+                        self.cnt += 1
+                    else:
+                        object.__setattr__(self, __name, __value)
+            rate_train, rate_test, rate_another = EqualValue(), EqualValue(), EqualValue()
+            distrib_train, distrib_test, distrib_another = EqualValue(), EqualValue(), EqualValue()
+            inter_train_test, inter_train_another, inter_test_another = EqualValue(), EqualValue(), EqualValue()
+            for client_i, (train_indice, test_indice, another_indice) in enumerate(indice_tuples):
+                train_set, test_set, another_set = set(train_indice), set(test_indice), set(another_indice)
+                if len(train_set) != len(train_indice) or \
+                    len(test_set) != len(test_indice) or \
+                    len(another_set) != len(another_indice) :
+                    raise RuntimeError('indice not unique')
+                len_data = len(client_whole_datasets[client_i])
+                def get_rate(indice):
+                    return len(indice) * 1.0 / len_data
+                def get_distribution(indice):
+                    return sum(1 for i in indice if i < len_data * 0.7) * 1.0 / len(indice)
+                rate_train.value = get_rate(train_indice)
+                rate_test.value = get_rate(test_indice)
+                rate_another.value = get_rate(another_indice)
+                distrib_train.value = get_distribution(train_indice)
+                print(distrib_train.value)
+                distrib_test.value = get_distribution(test_indice)
+                distrib_another.value = get_distribution(another_indice)
+                def handle_inter(value, set1, set2):
+                    value.value = (len(set1 & set2)) * 1.0 / len(set1)
+                handle_inter(inter_train_test, train_set, test_set)
+                handle_inter(inter_train_another, train_set, another_set)
+                handle_inter(inter_test_another, test_set, another_set)
+            with open(os.path.join(args.target_dir_name, 'indice_report'), 'w') as f:
+                f.write(f'   train   rate: {rate_train.value * 100:.2f}%\n')
+                f.write(f'   test    rate: {rate_test.value * 100:.2f}%\n')
+                f.write(f'   another rate: {rate_another.value * 100:.2f}%\n')
+                f.write(f'   train   distribution: {distrib_train.value * 100:.2f}%, {(1-distrib_train.value) * 100:.2f}%\n')
+                f.write(f'   test    distribution: {distrib_test.value * 100:.2f}%, {(1-distrib_test.value) * 100:.2f}%\n')
+                f.write(f'   another distribution: {distrib_another.value * 100:.2f}%, {(1-distrib_another.value) * 100:.2f}%\n')
+                f.write(f'   (train, test)    intersection: {inter_train_test.value * 100:.2f}%\n')
+                f.write(f'   (train, another) intersection: {inter_train_another.value * 100:.2f}%\n')
+                f.write(f'   (test , another) intersection: {inter_test_another.value * 100:.2f}%\n')
+            client_train_loads = [create_dataloader(Subset(dataset, indices[0])) for indices, dataset in zip(indice_tuples, client_whole_datasets) ]
+            client_test_loads = [create_dataloader(Subset(dataset, indices[1])) for indices, dataset in zip(indice_tuples, client_whole_datasets) ]
+            client_another_loads = [create_dataloader(Subset(dataset, indices[2])) for indices, dataset in zip(indice_tuples, client_whole_datasets) ]
         elif args.new_trial_method == 'new':
             client_combine_datasets = [
                 ConcatDataset([train_loader.dataset, test_loader.dataset]) 
