@@ -479,6 +479,22 @@ def LoadDataset(args, train_rate = 1.0, test_rate = 1.0):
         else:
             raise RuntimeError('args.new_trial_method invalid')
         return client_train_loads, client_test_loads, client_another_loads
-
+    elif "eicu" in args.dataset:
+        def create_dataloader(dataset):
+            return DataLoader(dataset,
+                            batch_size=len(dataset), 
+                            shuffle = args.shuffle,
+                            num_workers = args.num_workers,
+                            pin_memory = True,
+                            drop_last = args.drop_last)
+        client_whole_datasets = [ConcatDataset([train.dataset, test.dataset]) 
+                                    for train, test in zip(client_train_loads, client_test_loads)]
+        def compute_indice(len_data):
+            indices = np.arange(len_data)
+            np.random.shuffle(indices)
+            return indices[:int(len(indices)* 0.7)], indices[int(len(indices)* 0.7):]
+        indice_tuples = [compute_indice(len(dataset)) for dataset in client_whole_datasets]
+        client_train_loads = [create_dataloader(Subset(dataset, indices[0])) for indices, dataset in zip(indice_tuples, client_whole_datasets) ]
+        client_test_loads = [create_dataloader(Subset(dataset, indices[1])) for indices, dataset in zip(indice_tuples, client_whole_datasets) ]
     return client_train_loads, client_test_loads
 
