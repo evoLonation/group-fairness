@@ -302,17 +302,26 @@ def LoadDataset(args, train_rate = 1.0, test_rate = 1.0):
                 create_dataloader(cut_dataset(ConcatDataset([train_loader.dataset, test_loader.dataset]))[1]) 
                 for train_loader, test_loader in zip(client_train_loads, client_test_loads)
             ]
-        elif args.new_trial_method == 'old4' or args.new_trial_method == 'old5':
+        elif args.new_trial_method == 'old4' or args.new_trial_method == 'old5' or args.new_trial_method == 'old6' or args.new_trial_method == 'old7':
             client_whole_datasets = [ConcatDataset([train.dataset, test.dataset]) 
                                     for train, test in zip(client_train_loads, client_test_loads)]
             def compute_indice(len_data):
                 if args.new_trial_method == 'old4':
                     indices_train = np.random.choice(range(int(len_data * 0.7)), int(len_data * 0.35), replace = False)
                     indices_test = np.random.choice(range(int(len_data * 0.7), len_data), int(len_data * 0.15), replace = False)
-                else:
+                    indices_another = np.random.choice(range(len_data), int(len_data * 0.50), replace = False)
+                elif args.new_trial_method == 'old5':
                     indices_train = np.random.choice(range(len_data), int(len_data * 0.35), replace = False)
                     indices_test = np.random.choice(list(set(range(len_data)) - set(indices_train)), int(len_data * 0.15), replace = False)
-                indices_another = np.random.choice(range(len_data), int(len_data * 0.50), replace = False)
+                    indices_another = np.random.choice(range(len_data), int(len_data * 0.50), replace = False)
+                elif args.new_trial_method == 'old6':
+                    indices_train = np.random.choice(range(int(len_data * 0.7)), int(len_data * 0.35), replace = False)
+                    indices_test = np.random.choice(range(int(len_data * 0.7), len_data), int(len_data * 0.15), replace = False)
+                    indices_another = list(set(range(len_data)) - set(indices_train) - set(indices_test))
+                else:
+                    indices_train = np.random.choice(range(int(len_data)), int(len_data * 0.35), replace = False)
+                    indices_test = np.random.choice(list(set(range(int(len_data * 0.5))) - set(indices_train)), int(len_data * 0.15), replace = False)
+                    indices_another = list(set(range(len_data)) - set(indices_train) - set(indices_test))
                 return indices_train, indices_test, indices_another
             indice_tuples = [compute_indice(len(dataset)) for dataset in client_whole_datasets]
             # report sample
