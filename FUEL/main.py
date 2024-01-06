@@ -62,6 +62,7 @@ parser.add_argument('--new_trial_train_rate', type=float, default=0.35, help="")
 parser.add_argument('--new_trial_test_rate', type=float, default=0.15, help="")
 parser.add_argument('--new_trial_whole_rate', type=float, default=0.5, help="")
 parser.add_argument('--new_trial_method', type=str, required=True)
+parser.add_argument('--new_trial_bias_rate', type=float, default=0.5)
 args = parser.parse_args()
 
 
