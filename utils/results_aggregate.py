@@ -1,5 +1,12 @@
 import pandas as pd
 import os 
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('-d', dest='input_dir', type=str, required=True)
+parser.add_argument('-o', dest='output_dir', type=str, required=True)
+parser.add_argument('--bootstrap', action='store_true', default=False)
+args = parser.parse_args()
 
 class ResultAggregator:
     def __init__(self):
@@ -30,9 +37,9 @@ class ResultAggregator:
         pd.DataFrame(self.data_another).to_excel(excel_writer, index=False, sheet_name='another')
         excel_writer.close()
 
-bootstrap = False
-output_dir = 'results'
-origin_result_dir = '../FUEL/out/new_trial'
+bootstrap = args.bootstrap
+output_dir = args.output_dir
+origin_result_dir = args.input_dir
 os.makedirs(output_dir)
 tradition_dir = os.path.join(output_dir, 'tradition')
 os.makedirs(tradition_dir)
