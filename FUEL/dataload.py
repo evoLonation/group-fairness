@@ -493,7 +493,14 @@ def LoadDataset(args, train_rate = 1.0, test_rate = 1.0):
             indices = np.arange(len_data)
             np.random.shuffle(indices)
             return indices[:int(len(indices)* 0.7)], indices[int(len(indices)* 0.7):]
-        indice_tuples = [compute_indice(len(dataset)) for dataset in client_whole_datasets]
+        if not args.valid:
+            indice_tuples = [compute_indice(len(dataset)) for dataset in client_whole_datasets]
+            with open(os.path.join(args.target_dir_name, 'indices.json'), 'w') as f:
+                json.dump([{'train': train.tolist(), 'test': test.tolist()} for train, test in indice_tuples], f)
+        else:
+            with open(os.path.join(args.target_dir_name, 'indices.json'), 'r') as f:
+                content = json.load(f)
+            indice_tuples = [(np.array(client_content['train']), np.array(client_content['test'])) for client_content in content]
         client_train_loads = [create_dataloader(Subset(dataset, indices[0])) for indices, dataset in zip(indice_tuples, client_whole_datasets) ]
         client_test_loads = [create_dataloader(Subset(dataset, indices[1])) for indices, dataset in zip(indice_tuples, client_whole_datasets) ]
     return client_train_loads, client_test_loads
