@@ -428,9 +428,9 @@ def LoadDataset(args, train_rate = 1.0, test_rate = 1.0):
                     if __name == 'value':
                         if self.cnt == 0:
                             object.__setattr__(self, __name, __value)
-                        elif self.value < __value and self.value * 1.0 / __value > 0.80 or \
-                            self.value > __value and __value * 1.0 / self.value > 0.80 or \
-                            self.value < 0.001 and abs(self.value - __value) < 0.001 or \
+                        elif self.value < __value and self.value * 1.0 / __value > 0.50 or \
+                            self.value > __value and __value * 1.0 / self.value > 0.50 or \
+                            self.value < 0.01 and abs(self.value - __value) < 0.01 or \
                             self.value == __value:
                             object.__setattr__(self, __name, (self.value * self.cnt + __value) * 1.0 / (self.cnt+1))
                         else:
